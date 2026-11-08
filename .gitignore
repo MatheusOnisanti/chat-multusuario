@@ -1,0 +1,22 @@
+# Ferramentas locais
+.tools/
+
+# Artefatos de build
+target/
+
+# Configurações de IDE
+.idea/
+*.iml
+.vscode/
+
+# Banco H2 e arquivos de banco
+data/
+*.db
+*.mv.db
+*.trace.db
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.swp
+*.swo
