@@ -24,7 +24,7 @@ O pacote raiz é `br.edu.chat`.
 - `persistence.jdbc`: `ConnectionFactory`, SQL e `JdbcMensagemRepository`.
 - `service`: `ChatService`, `ConexaoCliente` e `ClientRegistry`. Não importa `java.net` nem `java.sql`.
 - `server`: `Servidor`, `ClienteHandler` e `Protocolo`, responsáveis pela comunicação TCP.
-- `client`: reservado para a futura aplicação cliente.
+- `client`: aplicação cliente TCP, apresentação das mensagens e interface gráfica Swing (`ClienteChatApp` e `ClienteChatFrame`).
 - `config`: reservado para configurações centralizadas, se necessário.
 
 O SQL permanece isolado na implementação JDBC. A camada de domínio permanece
@@ -84,7 +84,9 @@ duplicadas ou perdidas na entrada de novos clientes.
 
 ## Comandos de compilação e testes
 
-No terminal integrado do VS Code:
+O projeto exige Java 17 ou superior. No Windows, use o Maven Wrapper incluído no
+projeto, sem depender de uma instalação global do Maven. Execute os comandos no
+PowerShell, a partir da raiz do projeto:
 
 ```powershell
 .\mvnw.cmd -version
@@ -92,6 +94,34 @@ No terminal integrado do VS Code:
 .\mvnw.cmd test
 .\mvnw.cmd clean test
 ```
+
+## Execução da aplicação
+
+Compile o projeto antes de iniciar as aplicações:
+
+```powershell
+.\mvnw.cmd compile
+.\mvnw.cmd dependency:build-classpath "-Dmdep.outputFile=target\classpath.txt"
+$chatClassPath = "target\classes;" + (Get-Content target\classpath.txt -Raw).Trim()
+```
+
+Em um terminal PowerShell, inicie o servidor TCP na porta 5000:
+
+```powershell
+java -cp $chatClassPath br.edu.chat.server.ServidorApp
+```
+
+Com o servidor em execução, abra dois outros terminais PowerShell e inicie um
+cliente Swing em cada terminal:
+
+```powershell
+$chatClassPath = "target\classes;" + (Get-Content target\classpath.txt -Raw).Trim()
+java -cp $chatClassPath br.edu.chat.client.ClienteChatApp
+```
+
+Em cada janela, informe `localhost` como host, `5000` como porta e um nome
+diferente, por exemplo `Ana` no primeiro cliente e `Bruno` no segundo. Depois,
+clique em **Conectar** para testar o chat entre as duas instâncias.
 
 ## Requisitos funcionais previstos
 
@@ -105,7 +135,5 @@ desconexão segura e no mínimo cinco testes JUnit sem rede real.
 
 - O lock de coordenação é síncrono; um cliente lento pode atrasar temporariamente o histórico ou o broadcast.
 - Não há filas assíncronas para clientes lentos.
-- A aplicação cliente ainda não foi implementada.
-- A interface gráfica ainda não foi implementada.
 - Não há autenticação de usuários.
 - Não foram adicionados frameworks ou funcionalidades além do escopo aprovado.
