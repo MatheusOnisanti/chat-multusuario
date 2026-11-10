@@ -164,6 +164,88 @@ Para encerrar o servidor manualmente, volte ao terminal dedicado e pressione
 `Ctrl+C` ao final da apresentação. Em um computador novo, deixe o H2 criar uma
 base local vazia em vez de copiar o banco real.
 
+## Execução rápida para apresentação — Windows PowerShell
+
+Siga os passos abaixo em um computador novo. Os comandos não dependem do nome
+do usuário nem do caminho onde o projeto foi extraído.
+
+1. Instale um JDK 17 ou superior. Os comandos `java` e `keytool` precisam estar
+   disponíveis no PowerShell, e é necessária uma conexão com a internet na
+   primeira compilação, para o Maven Wrapper baixar o Maven.
+2. Abra o PowerShell na raiz do projeto, isto é, na pasta que contém o arquivo
+   `mvnw.cmd`.
+3. Verifique o ambiente Java:
+
+   ```powershell
+   java -version
+   keytool -help
+   ```
+
+   Se algum comando não for encontrado, localize o JDK instalado pelo Windows
+   ou com `Get-Command java.exe`. Configure `JAVA_HOME` apontando para a pasta
+   raiz do JDK, sem incluir `\bin`, e adicione sua pasta `bin` ao `PATH`:
+
+   ```powershell
+   $env:JAVA_HOME = "C:\caminho\para\o\jdk"
+   $env:Path = "$env:JAVA_HOME\bin;$env:Path"
+   ```
+
+   Substitua apenas o caminho de exemplo pelo caminho encontrado no computador
+   da apresentação. Cada terminal novo pode precisar repetir essa configuração.
+4. Libere a execução dos scripts somente na sessão atual:
+
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   ```
+
+5. Na primeira execução, prepare o TLS:
+
+   ```powershell
+   .\scripts\preparar-tls-demo.ps1
+   ```
+
+6. Em um terminal PowerShell, ainda na raiz do projeto, inicie o servidor:
+
+   ```powershell
+   .\scripts\iniciar-demonstracao.ps1 -Role Server
+   ```
+
+7. Em um segundo terminal PowerShell, também na raiz do projeto, inicie o
+   primeiro cliente:
+
+   ```powershell
+   .\scripts\iniciar-demonstracao.ps1 -Role Client
+   ```
+
+8. Em um terceiro terminal PowerShell, também na raiz do projeto, inicie o
+   segundo cliente:
+
+   ```powershell
+   .\scripts\iniciar-demonstracao.ps1 -Role Client
+   ```
+
+   Cada terminal precisa estar na raiz do projeto e pode precisar configurar
+   sua própria política de execução e seu próprio ambiente Java.
+9. Nos dois clientes, use **Cadastrar** para criar usuários diferentes, com
+   logins, nomes e senhas distintos. Depois, conecte cada cliente com seu
+   respectivo usuário, usando `localhost` e a porta `5000`. Envie mensagens de
+   um cliente e confirme que elas aparecem no outro.
+
+### Solução de problemas na apresentação
+
+- **JDK ou `keytool` não encontrado:** confirme `java -version` e
+  `keytool -help`, configure `JAVA_HOME` para a raiz do JDK e inclua
+  `JAVA_HOME\bin` no `PATH` da sessão.
+- **Scripts bloqueados:** execute novamente
+  `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` em cada terminal
+  PowerShell usado na apresentação.
+- **Porta 5000 ocupada:** encerre o programa que já está usando a porta ou
+  finalize a apresentação anterior. Para identificar o processo, use
+  `Get-NetTCPConnection -LocalPort 5000 -State Listen`.
+- **Primeira compilação Maven:** mantenha a internet disponível; o Maven
+  Wrapper baixa sua distribuição e dependências na primeira execução. Aguarde
+  a conclusão e tente novamente se o download for interrompido.
+
 ## Requisitos funcionais previstos
 
 O projeto completo prevê servidor com `ServerSocket` e laço `accept()`, uma
