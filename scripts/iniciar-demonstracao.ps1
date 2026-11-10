@@ -38,11 +38,11 @@ function Ensure-Build {
     $classes = Join-Path $projectRoot 'target\classes'
     $classpathFile = Join-Path $projectRoot 'target\classpath.txt'
     if (-not (Test-Path -LiteralPath $classes -PathType Container)) {
-        & $MavenWrapper 'compile'
+        & $MavenWrapper 'compile' | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'A compilação Maven falhou.' }
     }
     if (-not (Test-Path -LiteralPath $classpathFile -PathType Leaf)) {
-        & $MavenWrapper 'dependency:build-classpath' '-Dmdep.outputFile=target\classpath.txt'
+        & $MavenWrapper 'dependency:build-classpath' '-Dmdep.outputFile=target\classpath.txt' | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'A preparação do classpath Maven falhou.' }
     }
     return $classpathFile
@@ -51,7 +51,15 @@ function Ensure-Build {
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $javaExe = Resolve-JdkTool -Name 'java.exe'
 [void] (Resolve-JdkTool -Name 'keytool.exe')
-$versionText = (& $javaExe '-version' 2>&1 | Out-String)
+$originalErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $versionText = (& $javaExe '-version' 2>&1 | Out-String)
+    $javaExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $originalErrorActionPreference
+}
+if ($javaExitCode -ne 0) { throw 'A verificação da versão do Java falhou.' }
 if ($versionText -notmatch 'version "(?<major>\d+)') { throw 'Não foi possível identificar a versão do Java.' }
 if ([int] $Matches.major -lt 17) { throw 'É necessário Java 17 ou superior.' }
 
