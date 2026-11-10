@@ -13,6 +13,7 @@ import br.edu.chat.persistence.PersistenciaException;
 public final class ChatService {
 
     private static final Logger LOGGER = Logger.getLogger(ChatService.class.getName());
+    static final String HISTORY_INTERNAL_FAILURE = "HISTORY_INTERNAL_FAILURE";
 
     private final ClientRegistry clientRegistry;
     private final MensagemRepository mensagemRepository;
@@ -54,8 +55,8 @@ public final class ChatService {
             if (historicoDisponivel) {
                 try {
                     historico = mensagemRepository.listarHistorico();
-                } catch (PersistenciaException exception) {
-                    LOGGER.log(Level.SEVERE, "Não foi possível recuperar o histórico para o cliente.", exception);
+                } catch (RuntimeException exception) {
+                    LOGGER.log(Level.WARNING, HISTORY_INTERNAL_FAILURE);
                 }
             }
 
@@ -86,7 +87,7 @@ public final class ChatService {
                 try {
                     mensagemRepository.salvar(mensagem);
                 } catch (PersistenciaException exception) {
-                    LOGGER.log(Level.SEVERE, "A mensagem não foi transmitida porque não foi salva.", exception);
+                    LOGGER.log(Level.WARNING, HISTORY_INTERNAL_FAILURE);
                     return;
                 }
             }

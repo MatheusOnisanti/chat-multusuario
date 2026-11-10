@@ -2,6 +2,7 @@ package br.edu.chat.client;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -29,7 +30,8 @@ class ClienteChatDesconexaoTest {
             desconectado.countDown();
         });
 
-        cliente.conectar();
+        socket.prepararResposta();
+        cliente.conectar("ana", "senha".toCharArray());
 
         assertTrue(desconectado.await(1, TimeUnit.SECONDS));
         cliente.fechar();
@@ -47,7 +49,8 @@ class ClienteChatDesconexaoTest {
             desconectado.countDown();
         });
 
-        cliente.conectar();
+        socket.prepararResposta();
+        cliente.conectar("ana", "senha".toCharArray());
         cliente.fechar();
         cliente.fechar();
 
@@ -69,7 +72,8 @@ class ClienteChatDesconexaoTest {
             throw new IllegalStateException("falha simulada");
         });
 
-        cliente.conectar();
+        socket.prepararResposta();
+        cliente.conectar("ana", "senha".toCharArray());
 
         assertTrue(desconectado.await(1, TimeUnit.SECONDS));
         assertTrue(socket.fechado);
@@ -77,15 +81,27 @@ class ClienteChatDesconexaoTest {
 
     private static final class SocketDeTeste extends Socket {
         private final InputStream entrada;
+        private final ByteArrayOutputStream saida = new ByteArrayOutputStream();
         private boolean fechado;
 
         private SocketDeTeste(InputStream entrada) {
-            this.entrada = entrada;
+            this.entrada = new java.io.SequenceInputStream(
+                    new java.io.ByteArrayInputStream("OK|AUTENTICADO\n"
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)), entrada);
+        }
+
+        private void prepararResposta() {
+            // A resposta jÃ¡ faz parte do fluxo de entrada antes da autenticaÃ§Ã£o.
         }
 
         @Override
         public InputStream getInputStream() {
             return entrada;
+        }
+
+        @Override
+        public java.io.OutputStream getOutputStream() {
+            return saida;
         }
 
         @Override

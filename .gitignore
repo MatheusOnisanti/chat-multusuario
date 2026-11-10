@@ -11,6 +11,7 @@ target/
 
 # Banco H2 e arquivos de banco
 data/
+backups/
 *.db
 *.mv.db
 *.trace.db
@@ -20,3 +21,16 @@ data/
 *.temp
 *.swp
 *.swo
+
+# Material TLS e credenciais locais
+tls-local/
+*.crt
+*.p12
+*.pfx
+*.jks
+*.key
+*.pem
+*.pass
+*.password
+*.log
+logs/

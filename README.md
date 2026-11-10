@@ -5,7 +5,7 @@ em Java, com comunicação TCP, broadcast e histórico de mensagens persistido.
 
 ## Tecnologias
 
-- Java 17
+- Java 17 ou superior
 - Maven e Maven Wrapper
 - Sockets TCP e threads
 - JDBC com H2
@@ -29,6 +29,29 @@ O pacote raiz é `br.edu.chat`.
 
 O SQL permanece isolado na implementação JDBC. A camada de domínio permanece
 independente de rede e persistência.
+
+## Autenticação V2 e TLS
+
+O cliente atualizado utiliza os comandos `AUTENTICAR_V2` e `CADASTRAR_V2`. O
+cadastro solicita login, nome e senha; depois, o login normal utiliza apenas
+login e senha. Após a autenticação, o servidor retorna o nome canônico
+cadastrado, usado pelo cliente para identificar as próprias mensagens. Os
+comandos legados continuam disponíveis para compatibilidade.
+
+O servidor e cada cliente precisam destas variáveis de ambiente na sessão atual
+do PowerShell:
+
+```powershell
+$env:CHAT_TLS_KEYSTORE = "<caminho-local-do-keystore-PKCS12>"
+$env:CHAT_TLS_KEYSTORE_PASSWORD = "<senha-local-do-keystore>"
+$env:CHAT_TLS_TRUSTSTORE = "<caminho-local-do-truststore-PKCS12>"
+$env:CHAT_TLS_TRUSTSTORE_PASSWORD = "<senha-local-do-truststore>"
+```
+
+Os valores acima são exemplos. Não coloque senhas reais neste arquivo, no
+histórico de comandos ou no Git. Os certificados TLS e as senhas protegidas
+devem ser preparados localmente em cada computador e não devem ser enviados ao
+GitHub.
 
 ## Situação das etapas
 
@@ -62,6 +85,10 @@ O servidor utiliza H2 em arquivo:
 jdbc:h2:file:./data/chat
 ```
 
+Em uma instalação nova, ao iniciar o servidor, o H2 cria um banco novo em
+`./data/chat` e inicializa as tabelas necessárias. A pasta `data/` é local e
+ignorada pelo Git; não é necessário copiar o banco de outro computador.
+
 Os testes utilizam bancos H2 em memória ou arquivos temporários isolados. Cada
 operação JDBC abre sua própria conexão e utiliza try-with-resources para fechar
 conexões, comandos e resultados.
@@ -85,8 +112,9 @@ duplicadas ou perdidas na entrada de novos clientes.
 ## Comandos de compilação e testes
 
 O projeto exige Java 17 ou superior. No Windows, use o Maven Wrapper incluído no
-projeto, sem depender de uma instalação global do Maven. Execute os comandos no
-PowerShell, a partir da raiz do projeto:
+projeto, sem depender de uma instalação global do Maven. Na primeira execução,
+o Wrapper precisa de acesso à internet para baixar a distribuição do Maven.
+Execute os comandos no PowerShell, a partir da raiz do projeto:
 
 ```powershell
 .\mvnw.cmd -version
@@ -97,31 +125,44 @@ PowerShell, a partir da raiz do projeto:
 
 ## Execução da aplicação
 
-Compile o projeto antes de iniciar as aplicações:
+Para preparar certificados locais de demonstração, abra o PowerShell na raiz do
+projeto e execute:
 
 ```powershell
-.\mvnw.cmd compile
-.\mvnw.cmd dependency:build-classpath "-Dmdep.outputFile=target\classpath.txt"
-$chatClassPath = "target\classes;" + (Get-Content target\classpath.txt -Raw).Trim()
+. .\scripts\preparar-tls-demo.ps1
 ```
 
-Em um terminal PowerShell, inicie o servidor TCP na porta 5000:
+O script exige um JDK 17 ou superior, verifica `java.exe` e `keytool.exe`, cria
+os arquivos PKCS12 em `tls-local\demo` e protege a senha local com DPAPI. Ele
+não sobrescreve uma preparação existente. Execute a preparação sob o mesmo
+usuário Windows que fará a apresentação.
+
+Em um terminal PowerShell dedicado, inicie o servidor TCP na porta 5000:
 
 ```powershell
-java -cp $chatClassPath br.edu.chat.server.ServidorApp
+.\scripts\iniciar-demonstracao.ps1 -Role Server
 ```
 
-Com o servidor em execução, abra dois outros terminais PowerShell e inicie um
-cliente Swing em cada terminal:
+O script compila com o Maven Wrapper e gera `target\classpath.txt` somente se
+esses artefatos ainda não existirem. O Maven Wrapper pode precisar de internet
+na primeira execução. O servidor usa o banco relativo `./data/chat`.
+
+Com o servidor em execução, abra dois outros terminais PowerShell e execute o
+mesmo comando em cada um para iniciar um cliente Swing:
 
 ```powershell
-$chatClassPath = "target\classes;" + (Get-Content target\classpath.txt -Raw).Trim()
-java -cp $chatClassPath br.edu.chat.client.ClienteChatApp
+.\scripts\iniciar-demonstracao.ps1 -Role Client
 ```
 
-Em cada janela, informe `localhost` como host, `5000` como porta e um nome
-diferente, por exemplo `Ana` no primeiro cliente e `Bruno` no segundo. Depois,
-clique em **Conectar** para testar o chat entre as duas instâncias.
+Em cada janela, informe `localhost` como host e `5000` como porta. Para uma
+conta nova, marque **Cadastrar** e informe login, nome e senha. Depois do
+cadastro, ou para uma conta existente, deixe **Cadastrar** desmarcado e informe
+login e senha. O nome exibido após o login é o nome canônico retornado pelo
+servidor. Clique em **Conectar** para testar o chat entre as duas instâncias.
+
+Para encerrar o servidor manualmente, volte ao terminal dedicado e pressione
+`Ctrl+C` ao final da apresentação. Em um computador novo, deixe o H2 criar uma
+base local vazia em vez de copiar o banco real.
 
 ## Requisitos funcionais previstos
 
@@ -135,5 +176,6 @@ desconexão segura e no mínimo cinco testes JUnit sem rede real.
 
 - O lock de coordenação é síncrono; um cliente lento pode atrasar temporariamente o histórico ou o broadcast.
 - Não há filas assíncronas para clientes lentos.
-- Não há autenticação de usuários.
+- A autenticação V2 e o cadastro persistem as credenciais no banco H2 local; os
+  dados de uma máquina não são compartilhados automaticamente com outra.
 - Não foram adicionados frameworks ou funcionalidades além do escopo aprovado.

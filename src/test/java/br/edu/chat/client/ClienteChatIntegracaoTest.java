@@ -2,6 +2,9 @@ package br.edu.chat.client;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,15 +15,23 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import java.util.Arrays;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 import br.edu.chat.model.Mensagem;
 import br.edu.chat.persistence.jdbc.ConnectionFactory;
 import br.edu.chat.persistence.jdbc.JdbcMensagemRepository;
+import br.edu.chat.persistence.jdbc.JdbcUsuarioCredencialRepository;
+import br.edu.chat.persistence.jdbc.JdbcUsuarioRepository;
+import br.edu.chat.persistence.jdbc.JdbcCadastroUsuario;
 import br.edu.chat.server.Servidor;
+import br.edu.chat.config.ConfiguracaoTls;
 import br.edu.chat.service.ChatService;
 import br.edu.chat.service.ClientRegistry;
+import br.edu.chat.service.AutenticacaoService;
+import br.edu.chat.service.SenhaHasher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClienteChatIntegracaoTest {
+
+    private static final String SENHA_TLS = "teste-integracao-tls";
 
     @Test
     void deveConectarClienteAoServidorReal() throws Exception {
@@ -39,6 +52,91 @@ class ClienteChatIntegracaoTest {
             assertTrue(contexto.threadServidor.isAlive());
         } finally {
             fechar(contexto, cliente);
+        }
+    }
+
+    @Test
+    void deveCadastrarV2DesconectarEAutenticarNovamenteComNomeCanonico() throws Exception {
+        Contexto contexto = iniciarServidor();
+        String login = "v2_reconexao_" + UUID.randomUUID().toString().replace('-', '_');
+        String nomeCanonico = "Usuário V2 · Reconexão";
+        char[] senha = "senha-v2-reconexao".toCharArray();
+        ClienteChat primeiro = novoClienteSemAutenticacao(contexto, "Nome local");
+        ClienteChat segundo = null;
+        try {
+            primeiro.cadastrarV2(login, nomeCanonico, senha);
+            assertEquals(nomeCanonico, primeiro.getNomeAutenticado().orElseThrow());
+
+            primeiro.fechar();
+
+            segundo = novoClienteSemAutenticacao(contexto, "Outro nome local");
+            segundo.conectarV2(login, senha);
+
+            assertEquals(nomeCanonico, segundo.getNomeAutenticado().orElseThrow());
+        } finally {
+            Arrays.fill(senha, '\0');
+            fechar(contexto, primeiro, segundo);
+        }
+    }
+
+    @Test
+    void deveRejeitarSenhaIncorretaAposCadastroV2() throws Exception {
+        Contexto contexto = iniciarServidor();
+        String login = "v2_senha_" + UUID.randomUUID().toString().replace('-', '_');
+        char[] senhaCorreta = "senha-v2-correta".toCharArray();
+        char[] senhaIncorreta = "senha-v2-incorreta".toCharArray();
+        ClienteChat cadastro = novoClienteSemAutenticacao(contexto, "Cadastro V2");
+        ClienteChat tentativa = null;
+        try {
+            cadastro.cadastrarV2(login, "Usuário Senha", senhaCorreta);
+            cadastro.fechar();
+
+            tentativa = novoClienteSemAutenticacao(contexto, "Tentativa");
+            ClienteChat tentativaAtual = tentativa;
+            assertThrows(IOException.class,
+                    () -> tentativaAtual.conectarV2(login, senhaIncorreta));
+        } finally {
+            Arrays.fill(senhaCorreta, '\0');
+            Arrays.fill(senhaIncorreta, '\0');
+            fechar(contexto, cadastro, tentativa);
+        }
+    }
+
+    @Test
+    void deveRejeitarLoginInexistenteNoFluxoV2() throws Exception {
+        Contexto contexto = iniciarServidor();
+        char[] senha = "senha-v2-inexistente".toCharArray();
+        ClienteChat cliente = novoClienteSemAutenticacao(contexto, "Login inexistente");
+        try {
+            assertThrows(IOException.class,
+                    () -> cliente.conectarV2(
+                            "login_inexistente_" + UUID.randomUUID(), senha));
+        } finally {
+            Arrays.fill(senha, '\0');
+            fechar(contexto, cliente);
+        }
+    }
+
+    @Test
+    void deveRejeitarCadastroV2ComLoginDuplicado() throws Exception {
+        Contexto contexto = iniciarServidor();
+        String login = "v2_duplicado_" + UUID.randomUUID().toString().replace('-', '_');
+        char[] primeiraSenha = "senha-v2-primeira".toCharArray();
+        char[] segundaSenha = "senha-v2-segunda".toCharArray();
+        ClienteChat primeiro = novoClienteSemAutenticacao(contexto, "Primeiro");
+        ClienteChat segundo = null;
+        try {
+            primeiro.cadastrarV2(login, "Ana duplicada", primeiraSenha);
+            primeiro.fechar();
+
+            segundo = novoClienteSemAutenticacao(contexto, "Segundo");
+            ClienteChat segundoAtual = segundo;
+            assertThrows(IOException.class,
+                    () -> segundoAtual.cadastrarV2(login, "Outra Ana", segundaSenha));
+        } finally {
+            Arrays.fill(primeiraSenha, '\0');
+            Arrays.fill(segundaSenha, '\0');
+            fechar(contexto, primeiro, segundo);
         }
     }
 
@@ -87,13 +185,20 @@ class ClienteChatIntegracaoTest {
     void deveRecuperarHistoricoAoConectarNovoCliente() throws Exception {
         Contexto contexto = iniciarServidor();
         ClienteChat origem = novoCliente(contexto, "Ana", mensagem -> { });
+        ClienteChat observador = null;
         ClienteChat novoCliente = null;
+        CountDownLatch mensagemPersistida = new CountDownLatch(1);
         CountDownLatch historicoRecebido = new CountDownLatch(1);
         List<Mensagem> mensagens = new ArrayList<>();
         try {
             origem.conectar();
+            observador = novoCliente(contexto, "Caio", mensagem -> mensagemPersistida.countDown());
+            observador.conectar();
             origem.enviar("mensagem histórica");
+
+            assertTrue(mensagemPersistida.await(2, TimeUnit.SECONDS));
             origem.fechar();
+            observador.fechar();
 
             novoCliente = novoCliente(contexto, "Bia", mensagem -> {
                 mensagens.add(mensagem);
@@ -104,7 +209,7 @@ class ClienteChatIntegracaoTest {
             assertTrue(historicoRecebido.await(2, TimeUnit.SECONDS));
             assertEquals("mensagem histórica", mensagens.get(0).getConteudo());
         } finally {
-            fechar(contexto, origem, novoCliente);
+            fechar(contexto, origem, observador, novoCliente);
         }
     }
 
@@ -203,13 +308,70 @@ class ClienteChatIntegracaoTest {
         }
     }
 
+    @Test
+    void deveInterromperHandshakeQuandoServidorNaoResponde() throws Exception {
+        Path diretorio = Files.createTempDirectory("cliente-timeout-tls-");
+        Path keytool = localizarKeytool();
+        ConfiguracaoTls configuracao = criarConfiguracao(gerarMaterial(diretorio, keytool));
+        CountDownLatch aceitou = new CountDownLatch(1);
+        CountDownLatch encerrou = new CountDownLatch(1);
+        AtomicReference<Throwable> falhaServidor = new AtomicReference<>();
+
+        try (ServerSocket servidor = new ServerSocket(0)) {
+            Thread observador = new Thread(() -> {
+                try (Socket socket = servidor.accept()) {
+                    aceitou.countDown();
+                    socket.getInputStream().read();
+                    encerrou.countDown();
+                } catch (IOException exception) {
+                    falhaServidor.set(exception);
+                }
+            }, "servidor-tls-sem-handshake");
+            observador.start();
+
+            ClienteChat cliente = new ClienteChat(
+                    "127.0.0.1", servidor.getLocalPort(), "Ana", configuracao,
+                    mensagem -> { }, () -> { });
+            long inicio = System.nanoTime();
+            try {
+                assertThrows(IOException.class,
+                        () -> cliente.conectar("ana", "senha-teste".toCharArray()));
+                assertThrows(IllegalStateException.class, () -> cliente.enviar("não deve ser enviado"));
+            } finally {
+                cliente.fechar();
+            }
+
+            long duracao = System.nanoTime() - inicio;
+            assertTrue(duracao < TimeUnit.SECONDS.toNanos(7));
+            assertTrue(aceitou.await(1, TimeUnit.SECONDS));
+            assertTrue(encerrou.await(2, TimeUnit.SECONDS));
+            assertTrue(falhaServidor.get() == null, () ->
+                    "O servidor de teste falhou: " + falhaServidor.get());
+            observador.join(2000);
+            assertFalse(observador.isAlive());
+        }
+    }
+
     private static Contexto iniciarServidor() throws Exception {
         int porta = encontrarPortaLivre();
         String banco = "cliente_integracao_" + UUID.randomUUID().toString().replace('-', '_');
+        ConnectionFactory conexoes = ConnectionFactory.emMemoria(banco);
         ChatService service = new ChatService(
                 new ClientRegistry(),
-                new JdbcMensagemRepository(ConnectionFactory.emMemoria(banco)));
-        Servidor servidor = new Servidor(porta, service);
+                new JdbcMensagemRepository(conexoes));
+        Path diretorio = Files.createTempDirectory("cliente-tls-");
+        Path keytool = localizarKeytool();
+        MaterialTls material = gerarMaterial(diretorio, keytool);
+        ConfiguracaoTls configuracao = criarConfiguracao(material);
+        JdbcUsuarioRepository usuarios = new JdbcUsuarioRepository(
+                conexoes);
+        JdbcUsuarioCredencialRepository credenciais = new JdbcUsuarioCredencialRepository(
+                conexoes);
+        AutenticacaoService autenticacao = new AutenticacaoService(
+                new JdbcCadastroUsuario(conexoes),
+                usuarios, credenciais, new SenhaHasher());
+        cadastrarUsuarios(autenticacao);
+        Servidor servidor = new Servidor(porta, service, configuracao, autenticacao);
         AtomicReference<Throwable> falha = new AtomicReference<>();
         Thread threadServidor = new Thread(() -> {
             try {
@@ -220,12 +382,31 @@ class ClienteChatIntegracaoTest {
         }, "servidor-integracao-cliente");
         threadServidor.start();
         aguardarPorta(porta, falha);
-        return new Contexto(servidor, threadServidor, porta);
+        return new Contexto(servidor, threadServidor, porta, configuracao);
     }
 
     private static ClienteChat novoCliente(Contexto contexto, String nome,
             java.util.function.Consumer<Mensagem> callback) {
-        return new ClienteChat("127.0.0.1", contexto.porta, nome, callback);
+        ClienteChat cliente = new ClienteChat("127.0.0.1", contexto.porta, nome,
+                contexto.configuracao, callback, () -> { });
+        try {
+            cliente.conectar(nome.toLowerCase(), "senha-teste".toCharArray());
+            return cliente;
+        } catch (IOException exception) {
+            cliente.fechar();
+            throw new IllegalStateException("NÃ£o foi possÃ­vel autenticar cliente de teste.", exception);
+        }
+    }
+
+    private static ClienteChat novoClienteSemAutenticacao(Contexto contexto, String nome) {
+        return new ClienteChat("127.0.0.1", contexto.porta, nome,
+                contexto.configuracao, mensagem -> { }, () -> { });
+    }
+
+    private static void cadastrarUsuarios(AutenticacaoService autenticacao) {
+        for (String nome : List.of("Ana", "Bia", "Caio", "Preparador", "Victor", "Bruno")) {
+            autenticacao.cadastrar(nome.toLowerCase(), nome, "senha-teste".toCharArray());
+        }
     }
 
     private static void enviarAposInicio(CountDownLatch inicio, ClienteChat cliente, String conteudo) {
@@ -286,6 +467,68 @@ class ClienteChatIntegracaoTest {
         org.junit.jupiter.api.Assertions.assertTimeout(duracao, executable);
     }
 
-    private record Contexto(Servidor servidor, Thread threadServidor, int porta) {
+    private static ConfiguracaoTls criarConfiguracao(MaterialTls material) {
+        char[] senhaKeystore = SENHA_TLS.toCharArray();
+        char[] senhaTruststore = SENHA_TLS.toCharArray();
+        try {
+            return new ConfiguracaoTls(material.keystore(), senhaKeystore,
+                    material.truststore(), senhaTruststore);
+        } finally {
+            Arrays.fill(senhaKeystore, '\0');
+            Arrays.fill(senhaTruststore, '\0');
+        }
+    }
+
+    private static MaterialTls gerarMaterial(Path diretorio, Path keytool) throws Exception {
+        Path keystore = diretorio.resolve("servidor.p12");
+        Path certificado = diretorio.resolve("servidor.crt");
+        Path truststore = diretorio.resolve("confianca.p12");
+        executarKeytool(keytool, List.of("-genkeypair", "-alias", "servidor", "-keyalg", "RSA",
+                "-keysize", "2048", "-validity", "1", "-keystore", keystore.toString(),
+                "-storetype", "PKCS12", "-storepass", SENHA_TLS, "-keypass", SENHA_TLS,
+                "-dname", "CN=localhost", "-ext", "SAN=dns:localhost,ip:127.0.0.1"));
+        executarKeytool(keytool, List.of("-exportcert", "-alias", "servidor", "-keystore",
+                keystore.toString(), "-storetype", "PKCS12", "-storepass", SENHA_TLS,
+                "-rfc", "-file", certificado.toString()));
+        executarKeytool(keytool, List.of("-importcert", "-alias", "servidor", "-file",
+                certificado.toString(), "-keystore", truststore.toString(), "-storetype",
+                "PKCS12", "-storepass", SENHA_TLS, "-noprompt"));
+        return new MaterialTls(keystore, truststore);
+    }
+
+    private static void executarKeytool(Path keytool, List<String> argumentos) throws Exception {
+        ProcessBuilder processo = new ProcessBuilder();
+        processo.command().add(keytool.toString());
+        processo.command().addAll(argumentos);
+        processo.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+        processo.redirectError(ProcessBuilder.Redirect.DISCARD);
+        Process iniciado = processo.start();
+        try {
+            assertTrue(iniciado.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, iniciado.exitValue());
+        } finally {
+            iniciado.destroyForcibly();
+        }
+    }
+
+    private static Path localizarKeytool() {
+        Path javaHome = Path.of(System.getProperty("java.home"));
+        String nome = System.getProperty("os.name").toLowerCase().contains("win")
+                ? "keytool.exe" : "keytool";
+        Path executavel = javaHome.resolve("bin").resolve(nome);
+        if (!Files.isExecutable(executavel)) {
+            executavel = javaHome.getParent().resolve("bin").resolve(nome);
+        }
+        if (!Files.isExecutable(executavel)) {
+            throw new IllegalStateException("keytool não está disponível.");
+        }
+        return executavel;
+    }
+
+    private record MaterialTls(Path keystore, Path truststore) {
+    }
+
+    private record Contexto(Servidor servidor, Thread threadServidor, int porta,
+            ConfiguracaoTls configuracao) {
     }
 }
