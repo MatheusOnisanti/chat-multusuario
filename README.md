@@ -131,6 +131,10 @@ projeto e execute:
 ```powershell
 . .\scripts\preparar-tls-demo.ps1
 ```
+Execute
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.10'
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 O script exige um JDK 17 ou superior, verifica `java.exe` e `keytool.exe`, cria
 os arquivos PKCS12 em `tls-local\demo` e protege a senha local com DPAPI. Ele
