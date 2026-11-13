@@ -34,6 +34,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
 import javax.swing.JTextField;
@@ -42,6 +43,7 @@ import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.border.Border;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
@@ -68,6 +70,9 @@ public final class ClienteChatFrame extends JFrame {
     private static final Color FUNDO_AZUL_MARINHO = new Color(0x10, 0x1D, 0x33);
     private static final Color AZUL_SECUNDARIO = new Color(0x1E, 0x33, 0x52);
     private static final Color AZUL_PRINCIPAL = new Color(0x3B, 0x82, 0xF6);
+    private static final Color GRAFITE_1 = new Color(0x14, 0x18, 0x22);
+    private static final Color GRAFITE_2 = new Color(0x1B, 0x21, 0x2D);
+    private static final Color GRAFITE_3 = new Color(0x24, 0x2B, 0x39);
     private static final Color TEXTO_CLARO = new Color(0xF1, 0xF5, 0xF9);
     private static final Color TEXTO_SECUNDARIO = new Color(0xC5, 0xD2, 0xE3);
     private static final Color BORDA = new Color(0x3B, 0x54, 0x78);
@@ -95,11 +100,13 @@ public final class ClienteChatFrame extends JFrame {
     private final JPasswordField campoSenha = new JPasswordField(12);
     private final JCheckBox modoCadastro = new JCheckBox("Cadastrar");
     private final JTextPane areaHistorico = new JTextPane();
-    private final JTextField campoMensagem = new JTextField();
+    private final JTextField campoMensagem = new CampoMensagem("Mensagem em #geral");
     private final JButton botaoConectar = new JButton("Conectar");
     private final JButton botaoEnviar = new JButton("Enviar");
     private final JButton botaoDesconectar = new JButton("Desconectar");
     private final JLabel rotuloEstado = new JLabel("Desconectado");
+    private final JLabel rotuloPerfilNome = new JLabel("Visitante");
+    private final JLabel rotuloPerfilLogin = new JLabel("Nao autenticado");
     private final IndicadorStatusIcon iconeStatus = new IndicadorStatusIcon(
             STATUS_DESCONECTADO);
     private final JLabel indicadorEstado = new JLabel(iconeStatus);
@@ -121,7 +128,7 @@ public final class ClienteChatFrame extends JFrame {
         super("Chat Multiusuário");
         this.configuracaoTls = configuracaoTls;
         configurarJanela();
-        construirComponentes();
+        construirComponentesRedeSocial();
         configurarAcoes();
         atualizarEstadoControles();
     }
@@ -130,7 +137,7 @@ public final class ClienteChatFrame extends JFrame {
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout(8, 8));
         setResizable(true);
-        setMinimumSize(new Dimension(760, 520));
+        setMinimumSize(new Dimension(900, 600));
         getContentPane().setBackground(FUNDO_AZUL_MARINHO);
         addWindowListener(new WindowAdapter() {
             @Override
@@ -138,6 +145,419 @@ public final class ClienteChatFrame extends JFrame {
                 fecharJanela();
             }
         });
+    }
+
+    /**
+     * Reorganiza somente a apresentacao do cartao de chat. O cartao de login
+     * continua sendo construido pela implementacao existente, assim como os
+     * campos e os listeners usados pelo fluxo de autenticacao.
+     */
+    private void construirComponentesRedeSocial() {
+        construirComponentes();
+        Component painelLogin = painelCartoes.getComponent(0);
+
+        JPanel barraComunidades = new JPanel();
+        barraComunidades.setLayout(new javax.swing.BoxLayout(
+                barraComunidades, javax.swing.BoxLayout.Y_AXIS));
+        barraComunidades.setBackground(GRAFITE_3);
+        barraComunidades.setBorder(BorderFactory.createEmptyBorder(14, 10, 14, 10));
+        barraComunidades.add(criarBotaoComunidade("CM"));
+        barraComunidades.add(javax.swing.Box.createVerticalStrut(10));
+        barraComunidades.add(criarBotaoComunidade("+"));
+        barraComunidades.add(javax.swing.Box.createVerticalGlue());
+        barraComunidades.add(criarBotaoComunidade("?"));
+
+        JPanel painelCanais = new JPanel();
+        painelCanais.setLayout(new javax.swing.BoxLayout(
+                painelCanais, javax.swing.BoxLayout.Y_AXIS));
+        painelCanais.setBackground(GRAFITE_2);
+        painelCanais.setBorder(BorderFactory.createEmptyBorder(18, 14, 14, 14));
+        painelCanais.setPreferredSize(new Dimension(190, 0));
+        JLabel nomeComunidade = criarRotulo("Comunidade local", 14, true, TEXTO_CLARO);
+        nomeComunidade.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painelCanais.add(nomeComunidade);
+        JLabel avisoDemo = criarRotulo("Navegacao demonstrativa", 10, false, TEXTO_SECUNDARIO);
+        avisoDemo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painelCanais.add(javax.swing.Box.createVerticalStrut(4));
+        painelCanais.add(avisoDemo);
+        painelCanais.add(javax.swing.Box.createVerticalStrut(22));
+        painelCanais.add(criarTituloSecao("CANAIS DE TEXTO"));
+        painelCanais.add(criarItemCanal("#  geral", true));
+        painelCanais.add(criarItemCanal("#  ideias  (demo)", false));
+        painelCanais.add(criarItemCanal("#  avisos  (demo)", false));
+        painelCanais.add(javax.swing.Box.createVerticalGlue());
+        painelCanais.add(criarBlocoPerfilCompacto());
+
+        JLabel tituloCanal = criarRotulo("# geral", 17, true, TEXTO_CLARO);
+        JLabel subtituloCanal = criarRotulo(
+                "Chat global conectado • outros canais sao demonstrativos",
+                11, false, TEXTO_SECUNDARIO);
+        JPanel identificacaoCanal = new JPanel();
+        identificacaoCanal.setLayout(new javax.swing.BoxLayout(
+                identificacaoCanal, javax.swing.BoxLayout.Y_AXIS));
+        identificacaoCanal.setOpaque(false);
+        identificacaoCanal.add(tituloCanal);
+        identificacaoCanal.add(javax.swing.Box.createVerticalStrut(3));
+        identificacaoCanal.add(subtituloCanal);
+
+        JPanel painelStatusChat = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        painelStatusChat.setOpaque(false);
+        estilizarBotao(botaoDesconectar);
+        indicadorEstado.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 0));
+        rotuloEstado.setFont(FONTE_PADRAO.deriveFont(Font.BOLD, 12f));
+        rotuloEstado.setForeground(TEXTO_CLARO);
+        painelStatusChat.add(indicadorEstado);
+        painelStatusChat.add(rotuloEstado);
+        painelStatusChat.add(botaoDesconectar);
+
+        JPanel painelCabecalhoChat = new JPanel(new BorderLayout(12, 0));
+        painelCabecalhoChat.setBackground(GRAFITE_2);
+        painelCabecalhoChat.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, BORDA),
+                BorderFactory.createEmptyBorder(12, 16, 12, 16)));
+        painelCabecalhoChat.add(identificacaoCanal, BorderLayout.CENTER);
+        painelCabecalhoChat.add(painelStatusChat, BorderLayout.EAST);
+
+        estilizarCampo(campoMensagem);
+        campoMensagem.setBorder(new BordaArredondada(BORDA, 18,
+                BorderFactory.createEmptyBorder(9, 14, 9, 14)));
+        campoMensagem.setToolTipText("Mensagem em #geral");
+        areaHistorico.setEditorKit(new MensagemEditorKit());
+        areaHistorico.setEditable(false);
+        areaHistorico.setFont(FONTE_PADRAO);
+        areaHistorico.setForeground(TEXTO_CLARO);
+        areaHistorico.setBackground(GRAFITE_1);
+        areaHistorico.setCaretColor(TEXTO_CLARO);
+        areaHistorico.setBorder(BorderFactory.createEmptyBorder(14, 16, 14, 16));
+        JScrollPane painelHistorico = new JScrollPane(areaHistorico);
+        painelHistorico.setBorder(null);
+        painelHistorico.getViewport().setBackground(GRAFITE_1);
+        JScrollBar barraHistorico = painelHistorico.getVerticalScrollBar();
+        barraHistorico.setUI(new TemaScrollBarUI());
+        barraHistorico.setBackground(GRAFITE_2);
+        barraHistorico.setUnitIncrement(16);
+        barraHistorico.setBlockIncrement(96);
+
+        JPanel painelEnvio = new JPanel(new BorderLayout(8, 4));
+        painelEnvio.setBackground(GRAFITE_1);
+        painelEnvio.setBorder(BorderFactory.createEmptyBorder(10, 16, 16, 16));
+        estilizarBotao(botaoEnviar);
+        painelEnvio.add(campoMensagem, BorderLayout.CENTER);
+        painelEnvio.add(botaoEnviar, BorderLayout.EAST);
+
+        JPanel painelChat = new JPanel(new BorderLayout());
+        painelChat.setBackground(GRAFITE_1);
+        painelChat.add(painelCabecalhoChat, BorderLayout.NORTH);
+        painelChat.add(painelHistorico, BorderLayout.CENTER);
+        painelChat.add(painelEnvio, BorderLayout.SOUTH);
+
+        JPanel painelPerfil = criarPainelMembros();
+        JPanel centro = new JPanel(new BorderLayout(1, 0));
+        centro.setBackground(BORDA);
+        centro.add(painelCanais, BorderLayout.WEST);
+        centro.add(painelChat, BorderLayout.CENTER);
+
+        JPanel estruturaChat = new JPanel(new BorderLayout(1, 0));
+        estruturaChat.setBackground(BORDA);
+        estruturaChat.add(barraComunidades, BorderLayout.WEST);
+        estruturaChat.add(centro, BorderLayout.CENTER);
+        estruturaChat.add(painelPerfil, BorderLayout.EAST);
+
+        painelCartoes.removeAll();
+        painelCartoes.add(painelLogin, CARTAO_LOGIN);
+        painelCartoes.add(estruturaChat, CARTAO_CHAT);
+        layoutCartoes.show(painelCartoes, CARTAO_LOGIN);
+        revalidate();
+        repaint();
+        pack();
+        setLocationByPlatform(true);
+    }
+
+    private JPanel criarPainelPerfil() {
+        JPanel painel = new JPanel();
+        painel.setLayout(new javax.swing.BoxLayout(painel, javax.swing.BoxLayout.Y_AXIS));
+        painel.setBackground(GRAFITE_2);
+        painel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 1, 0, 0, BORDA),
+                BorderFactory.createEmptyBorder(18, 16, 16, 16)));
+        painel.setPreferredSize(new Dimension(190, 0));
+
+        JLabel titulo = criarRotulo("SEU PERFIL", 11, true, TEXTO_SECUNDARIO);
+        titulo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(titulo);
+        painel.add(javax.swing.Box.createVerticalStrut(18));
+        JLabel avatar = criarRotulo("●", 42, true, AZUL_PRINCIPAL);
+        avatar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(avatar);
+        painel.add(javax.swing.Box.createVerticalStrut(10));
+        rotuloPerfilNome.setFont(FONTE_PADRAO.deriveFont(Font.BOLD, 15f));
+        rotuloPerfilNome.setForeground(TEXTO_CLARO);
+        rotuloPerfilNome.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(rotuloPerfilNome);
+        rotuloPerfilLogin.setFont(FONTE_PADRAO.deriveFont(Font.PLAIN, 11f));
+        rotuloPerfilLogin.setForeground(TEXTO_SECUNDARIO);
+        rotuloPerfilLogin.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(javax.swing.Box.createVerticalStrut(3));
+        painel.add(rotuloPerfilLogin);
+        painel.add(javax.swing.Box.createVerticalStrut(18));
+        JLabel status = criarRotulo("●  identidade autenticada", 11, false, STATUS_CONECTADO);
+        status.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(status);
+        painel.add(javax.swing.Box.createVerticalGlue());
+        JLabel nota = criarRotulo("Comunidades e canais reais serao adicionados em uma etapa futura.",
+                10, false, TEXTO_SECUNDARIO);
+        nota.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(nota);
+        return painel;
+    }
+
+    private JPanel criarBlocoPerfilCompacto() {
+        JPanel painel = new JPanel(new BorderLayout(8, 0));
+        painel.setBackground(GRAFITE_3);
+        painel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, BORDA),
+                BorderFactory.createEmptyBorder(10, 8, 10, 8)));
+        JLabel avatar = criarRotulo("●", 20, true, AZUL_PRINCIPAL);
+        painel.add(avatar, BorderLayout.WEST);
+        JPanel textos = new JPanel();
+        textos.setOpaque(false);
+        textos.setLayout(new javax.swing.BoxLayout(textos, javax.swing.BoxLayout.Y_AXIS));
+        rotuloPerfilNome.setFont(FONTE_PADRAO.deriveFont(Font.BOLD, 12f));
+        rotuloPerfilNome.setForeground(TEXTO_CLARO);
+        rotuloPerfilLogin.setFont(FONTE_PADRAO.deriveFont(Font.PLAIN, 10f));
+        rotuloPerfilLogin.setForeground(TEXTO_SECUNDARIO);
+        textos.add(rotuloPerfilNome);
+        textos.add(rotuloPerfilLogin);
+        painel.add(textos, BorderLayout.CENTER);
+        painel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 58));
+        return painel;
+    }
+
+    private JPanel criarPainelMembros() {
+        JPanel painel = new JPanel();
+        painel.setLayout(new javax.swing.BoxLayout(painel, javax.swing.BoxLayout.Y_AXIS));
+        painel.setBackground(GRAFITE_2);
+        painel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 1, 0, 0, BORDA),
+                BorderFactory.createEmptyBorder(18, 14, 14, 14)));
+        painel.setPreferredSize(new Dimension(190, 0));
+
+        JLabel titulo = criarRotulo("MEMBROS", 11, true, TEXTO_SECUNDARIO);
+        titulo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(titulo);
+        painel.add(javax.swing.Box.createVerticalStrut(10));
+        painel.add(criarMembroDemonstrativo("●", "Voce", "online", STATUS_CONECTADO));
+        painel.add(criarMembroDemonstrativo("●", "Ana", "online", STATUS_CONECTADO));
+        painel.add(criarMembroDemonstrativo("●", "Bia", "demonstracao", STATUS_EM_ANDAMENTO));
+        painel.add(criarMembroDemonstrativo("●", "Equipe Azul", "offline", TEXTO_SECUNDARIO));
+        painel.add(javax.swing.Box.createVerticalStrut(10));
+        JLabel nota = criarRotulo("Membros demonstrativos", 10, false, TEXTO_SECUNDARIO);
+        nota.setAlignmentX(Component.LEFT_ALIGNMENT);
+        painel.add(nota);
+        return painel;
+    }
+
+    private static JPanel criarMembroDemonstrativo(String marcador, String nome,
+            String estado, Color corEstado) {
+        JPanel linha = new JPanel(new BorderLayout(8, 0));
+        linha.setOpaque(false);
+        linha.setBorder(BorderFactory.createEmptyBorder(1, 0, 1, 0));
+        JLabel avatar = criarRotulo(marcador, 18, true, corEstado);
+        linha.add(avatar, BorderLayout.WEST);
+        JPanel textos = new JPanel();
+        textos.setOpaque(false);
+        textos.setLayout(new javax.swing.BoxLayout(textos, javax.swing.BoxLayout.Y_AXIS));
+        textos.add(criarRotulo(nome, 11, true, TEXTO_CLARO));
+        textos.add(criarRotulo(estado, 9, false, TEXTO_SECUNDARIO));
+        linha.add(textos, BorderLayout.CENTER);
+        linha.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return linha;
+    }
+
+    private static JButton criarBotaoComunidade(String texto) {
+        JButton botao = new BotaoComunidade(texto, texto.equals("CM"));
+        botao.setAlignmentX(Component.CENTER_ALIGNMENT);
+        botao.setPreferredSize(new Dimension(48, 48));
+        botao.setMaximumSize(new Dimension(48, 48));
+        botao.setFont(FONTE_PADRAO.deriveFont(Font.BOLD, 13f));
+        botao.setForeground(TEXTO_CLARO);
+        botao.setBackground(texto.equals("CM") ? AZUL_PRINCIPAL : GRAFITE_2);
+        botao.setFocusPainted(false);
+        botao.setBorder(new BordaCircular(BORDA, texto.equals("CM")));
+        return botao;
+    }
+
+    private static JLabel criarTituloSecao(String texto) {
+        JLabel label = criarRotulo(texto, 10, true, TEXTO_SECUNDARIO);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private static JLabel criarItemCanal(String texto, boolean ativo) {
+        JLabel label = criarRotulo(texto, 13, ativo, ativo ? TEXTO_CLARO : TEXTO_SECUNDARIO);
+        label.setOpaque(true);
+        label.setBackground(ativo ? AZUL_PRINCIPAL.darker() : GRAFITE_2);
+        label.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        label.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        return label;
+    }
+
+    private static JLabel criarRotulo(String texto, int tamanho, boolean negrito, Color cor) {
+        JLabel label = new JLabel(texto);
+        label.setFont(FONTE_PADRAO.deriveFont(negrito ? Font.BOLD : Font.PLAIN, (float) tamanho));
+        label.setForeground(cor);
+        return label;
+    }
+
+    private static final class CampoMensagem extends JTextField {
+
+        private final String placeholder;
+
+        private CampoMensagem(String placeholder) {
+            this.placeholder = placeholder;
+        }
+
+        @Override
+        protected void paintComponent(Graphics grafico) {
+            super.paintComponent(grafico);
+            if (!isFocusOwner() && getText().isEmpty()) {
+                Graphics2D grafico2d = (Graphics2D) grafico.create();
+                try {
+                    grafico2d.setColor(TEXTO_SECUNDARIO);
+                    grafico2d.setFont(getFont());
+                    Insets margens = getInsets();
+                    grafico2d.drawString(placeholder, margens.left,
+                            (getHeight() - grafico2d.getFontMetrics().getHeight()) / 2
+                                    + grafico2d.getFontMetrics().getAscent());
+                } finally {
+                    grafico2d.dispose();
+                }
+            }
+        }
+    }
+
+    private static final class BordaArredondada extends javax.swing.border.AbstractBorder {
+
+        private final Color cor;
+        private final int raio;
+        private final Border margens;
+
+        private BordaArredondada(Color cor, int raio, Border margens) {
+            this.cor = cor;
+            this.raio = raio;
+            this.margens = margens;
+        }
+
+        @Override
+        public Insets getBorderInsets(Component componente) {
+            Insets insets = margens.getBorderInsets(componente);
+            return new Insets(insets.top, insets.left, insets.bottom, insets.right);
+        }
+
+        @Override
+        public void paintBorder(Component componente, Graphics grafico, int x, int y,
+                int largura, int altura) {
+            Graphics2D grafico2d = (Graphics2D) grafico.create();
+            try {
+                grafico2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                grafico2d.setColor(cor);
+                grafico2d.drawRoundRect(x, y, largura - 1, altura - 1, raio, raio);
+            } finally {
+                grafico2d.dispose();
+            }
+        }
+    }
+
+    private static final class BotaoComunidade extends JButton {
+
+        private final boolean selecionado;
+
+        private BotaoComunidade(String texto, boolean selecionado) {
+            super(texto);
+            this.selecionado = selecionado;
+            setContentAreaFilled(false);
+            setOpaque(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics grafico) {
+            Graphics2D grafico2d = (Graphics2D) grafico.create();
+            try {
+                grafico2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                grafico2d.setColor(getBackground());
+                grafico2d.fillOval(0, 0, getWidth() - 1, getHeight() - 1);
+                super.paintComponent(grafico2d);
+            } finally {
+                grafico2d.dispose();
+            }
+        }
+    }
+
+    private static final class BordaCircular extends javax.swing.border.AbstractBorder {
+
+        private final Color cor;
+        private final boolean selecionado;
+
+        private BordaCircular(Color cor, boolean selecionado) {
+            this.cor = cor;
+            this.selecionado = selecionado;
+        }
+
+        @Override
+        public Insets getBorderInsets(Component componente) {
+            return new Insets(2, 2, 2, 2);
+        }
+
+        @Override
+        public void paintBorder(Component componente, Graphics grafico, int x, int y,
+                int largura, int altura) {
+            Graphics2D grafico2d = (Graphics2D) grafico.create();
+            try {
+                grafico2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                grafico2d.setColor(selecionado ? TEXTO_CLARO : cor);
+                grafico2d.setStroke(new java.awt.BasicStroke(selecionado ? 3f : 1f));
+                grafico2d.drawOval(x + 1, y + 1, largura - 3, altura - 3);
+            } finally {
+                grafico2d.dispose();
+            }
+        }
+    }
+
+    private static final class TemaScrollBarUI extends BasicScrollBarUI {
+
+        @Override
+        protected void configureScrollBarColors() {
+            thumbColor = GRAFITE_3;
+            thumbHighlightColor = GRAFITE_3.brighter();
+            thumbDarkShadowColor = GRAFITE_1;
+            trackColor = GRAFITE_1;
+            trackHighlightColor = GRAFITE_1;
+        }
+
+        @Override
+        protected JButton createDecreaseButton(int orientation) {
+            return criarBotaoVazio();
+        }
+
+        @Override
+        protected JButton createIncreaseButton(int orientation) {
+            return criarBotaoVazio();
+        }
+
+        private static JButton criarBotaoVazio() {
+            JButton botao = new JButton();
+            botao.setPreferredSize(new Dimension(0, 0));
+            botao.setMinimumSize(new Dimension(0, 0));
+            botao.setMaximumSize(new Dimension(0, 0));
+            botao.setBorder(null);
+            botao.setOpaque(false);
+            return botao;
+        }
     }
 
     private void construirComponentes() {
@@ -154,7 +574,7 @@ public final class ClienteChatFrame extends JFrame {
         JPanel painelTituloLogin = new JPanel();
         painelTituloLogin.setLayout(new javax.swing.BoxLayout(
                 painelTituloLogin, javax.swing.BoxLayout.Y_AXIS));
-        painelTituloLogin.setBackground(AZUL_SECUNDARIO);
+        painelTituloLogin.setOpaque(false);
         painelTituloLogin.add(tituloLogin);
         painelTituloLogin.add(javax.swing.Box.createVerticalStrut(4));
         painelTituloLogin.add(subtituloLogin);
@@ -162,22 +582,28 @@ public final class ClienteChatFrame extends JFrame {
         JPanel painelAutenticacao = new JPanel();
         painelAutenticacao.setLayout(new javax.swing.BoxLayout(
                 painelAutenticacao, javax.swing.BoxLayout.Y_AXIS));
-        painelAutenticacao.setBackground(AZUL_SECUNDARIO);
+        painelAutenticacao.setBackground(GRAFITE_2);
         adicionarCampoVertical(painelAutenticacao, "Login:", campoLogin);
         adicionarCampoVertical(painelAutenticacao, "Nome:", campoNome);
         adicionarCampoVertical(painelAutenticacao, "Senha:", campoSenha);
         modoCadastro.setFont(FONTE_PADRAO);
         modoCadastro.setForeground(TEXTO_CLARO);
-        modoCadastro.setBackground(AZUL_SECUNDARIO);
+        modoCadastro.setBackground(GRAFITE_2);
+        modoCadastro.setOpaque(false);
+        modoCadastro.setFocusPainted(false);
+        modoCadastro.setBorder(new BordaArredondada(BORDA, 12,
+                BorderFactory.createEmptyBorder(5, 8, 5, 8)));
+        modoCadastro.setBorderPainted(true);
+        modoCadastro.setPreferredSize(new Dimension(132, 32));
+        modoCadastro.setMaximumSize(new Dimension(132, 32));
         modoCadastro.setAlignmentX(Component.LEFT_ALIGNMENT);
         painelAutenticacao.add(modoCadastro);
 
         JPanel painelCamposConexao = new JPanel();
         painelCamposConexao.setLayout(new javax.swing.BoxLayout(
                 painelCamposConexao, javax.swing.BoxLayout.Y_AXIS));
-        painelCamposConexao.setBackground(AZUL_SECUNDARIO);
-        painelCamposConexao.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(BORDA),
+        painelCamposConexao.setBackground(GRAFITE_3);
+        painelCamposConexao.setBorder(new BordaArredondada(BORDA, 14,
                 BorderFactory.createEmptyBorder(8, 10, 8, 10)));
         adicionarCampoVertical(painelCamposConexao, "Host:", campoHost);
         adicionarCampoVertical(painelCamposConexao, "Porta:", campoPorta);
@@ -187,7 +613,7 @@ public final class ClienteChatFrame extends JFrame {
                 "Configurações de conexão  ▸");
         botaoConfiguracoes.setFont(FONTE_PADRAO.deriveFont(Font.BOLD, 12f));
         botaoConfiguracoes.setForeground(TEXTO_SECUNDARIO);
-        botaoConfiguracoes.setBackground(AZUL_SECUNDARIO);
+        botaoConfiguracoes.setBackground(GRAFITE_2);
         botaoConfiguracoes.setBorderPainted(false);
         botaoConfiguracoes.setFocusPainted(false);
         botaoConfiguracoes.setContentAreaFilled(false);
@@ -204,25 +630,24 @@ public final class ClienteChatFrame extends JFrame {
         });
 
         JPanel painelBotoesLogin = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        painelBotoesLogin.setBackground(AZUL_SECUNDARIO);
-        painelBotoesLogin.setBorder(BorderFactory.createEmptyBorder(2, 2, 0, 2));
+        painelBotoesLogin.setBackground(GRAFITE_2);
+        painelBotoesLogin.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
         estilizarBotao(botaoConectar);
+        botaoConectar.setPreferredSize(new Dimension(180, 40));
+        botaoConectar.setMinimumSize(new Dimension(180, 40));
         painelBotoesLogin.add(botaoConectar);
 
         JPanel painelLogin = new JPanel(new BorderLayout(0, 8));
         painelLogin.setBackground(FUNDO_AZUL_MARINHO);
-        painelLogin.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(BORDA),
-                BorderFactory.createEmptyBorder(10, 12, 10, 12)));
-        painelLogin.setPreferredSize(new Dimension(460, 430));
+        painelLogin.setBorder(null);
+        painelLogin.setPreferredSize(new Dimension(520, 480));
 
         JPanel painelFormulario = new JPanel();
         painelFormulario.setLayout(new javax.swing.BoxLayout(
                 painelFormulario, javax.swing.BoxLayout.Y_AXIS));
-        painelFormulario.setBackground(AZUL_SECUNDARIO);
-        painelFormulario.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(BORDA),
-                BorderFactory.createEmptyBorder(24, 28, 24, 28)));
+        painelFormulario.setBackground(GRAFITE_2);
+        painelFormulario.setBorder(new BordaArredondada(BORDA, 22,
+                BorderFactory.createEmptyBorder(26, 32, 26, 32)));
         painelFormulario.add(painelTituloLogin);
         painelFormulario.add(javax.swing.Box.createVerticalStrut(24));
         painelFormulario.add(painelAutenticacao);
@@ -327,7 +752,7 @@ public final class ClienteChatFrame extends JFrame {
     private static void adicionarCampoVertical(JPanel painel, String rotulo,
             JTextField campo) {
         JPanel grupo = new JPanel(new BorderLayout(0, 4));
-        grupo.setBackground(AZUL_SECUNDARIO);
+         grupo.setBackground(GRAFITE_2);
         grupo.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel etiqueta = new JLabel(rotulo);
@@ -347,7 +772,7 @@ public final class ClienteChatFrame extends JFrame {
     private static void estilizarCampo(JTextField campo) {
         campo.setFont(FONTE_PADRAO);
         campo.setForeground(TEXTO_CLARO);
-        campo.setBackground(AZUL_SECUNDARIO);
+        campo.setBackground(GRAFITE_3);
         campo.setCaretColor(TEXTO_CLARO);
         campo.setDisabledTextColor(TEXTO_SECUNDARIO);
         campo.setBorder(BORDA_CAMPO);
@@ -375,14 +800,12 @@ public final class ClienteChatFrame extends JFrame {
         if (botao.isEnabled()) {
             botao.setBackground(AZUL_PRINCIPAL);
             botao.setForeground(TEXTO_CLARO);
-            botao.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(AZUL_PRINCIPAL.darker()),
+            botao.setBorder(new BordaArredondada(AZUL_PRINCIPAL.darker(), 12,
                     BorderFactory.createEmptyBorder(7, 13, 7, 13)));
         } else {
             botao.setBackground(FUNDO_DESABILITADO);
             botao.setForeground(TEXTO_SECUNDARIO);
-            botao.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(BORDA),
+            botao.setBorder(new BordaArredondada(BORDA, 12,
                     BorderFactory.createEmptyBorder(7, 13, 7, 13)));
         }
     }
@@ -486,6 +909,8 @@ public final class ClienteChatFrame extends JFrame {
                         ClienteChatApresentacao.validarNome(nomeCanonico);
                         cliente = clienteAutenticado;
                         campoNome.setText(nomeCanonico);
+                        rotuloPerfilNome.setText(nomeCanonico);
+                        rotuloPerfilLogin.setText("@" + campoLogin.getText().trim());
                         atualizarEstado("Conectado");
                         mostrarCartao(CARTAO_CHAT);
                     } catch (InterruptedException exception) {
@@ -619,6 +1044,8 @@ public final class ClienteChatFrame extends JFrame {
                     return;
                 }
                 atualizarEstado("Desconectado");
+                rotuloPerfilNome.setText("Visitante");
+                rotuloPerfilLogin.setText("Nao autenticado");
                 atualizarEstadoControles();
                 mostrarCartao(CARTAO_LOGIN);
             }
@@ -678,6 +1105,8 @@ public final class ClienteChatFrame extends JFrame {
             cliente = null;
             conexaoEmAndamento = false;
             atualizarEstado("Desconectado");
+            rotuloPerfilNome.setText("Visitante");
+            rotuloPerfilLogin.setText("Nao autenticado");
             atualizarEstadoControles();
             mostrarCartao(CARTAO_LOGIN);
             if (!encerramentoIntencional && !janelaEmFechamento) {
@@ -768,10 +1197,11 @@ public final class ClienteChatFrame extends JFrame {
         SimpleAttributeSet atributos = new SimpleAttributeSet();
         StyleConstants.setAlignment(atributos,
                 propria ? StyleConstants.ALIGN_RIGHT : StyleConstants.ALIGN_LEFT);
+        // Mantem os metadados legados para compatibilidade; a pintura nova nao usa baloes.
         StyleConstants.setBackground(atributos,
                 propria ? AZUL_PRINCIPAL : AZUL_SECUNDARIO);
-        StyleConstants.setSpaceAbove(atributos, 5);
-        StyleConstants.setSpaceBelow(atributos, 5);
+        StyleConstants.setSpaceAbove(atributos, 7);
+        StyleConstants.setSpaceBelow(atributos, 7);
         return atributos;
     }
 
@@ -843,8 +1273,8 @@ public final class ClienteChatFrame extends JFrame {
 
     private static final class MensagemConteudoView extends LabelView {
 
-        private static final int MARGEM_HORIZONTAL = 24;
-        private static final int MARGEM_VERTICAL = 16;
+        private static final int MARGEM_HORIZONTAL = 58;
+        private static final int MARGEM_VERTICAL = 18;
         private static final int TAMANHO_FONTE_CABECALHO = 12;
         private static final int LARGURA_MAXIMA = 520;
         private static final int LARGURA_NAO_CALCULADA = -1;
@@ -859,6 +1289,7 @@ public final class ClienteChatFrame extends JFrame {
         private DadosMensagem obterDadosMensagem() {
             AttributeSet atributos = getElement().getAttributes();
             return new DadosMensagem(
+                    (String) atributos.getAttribute(ATRIBUTO_REMETENTE),
                     (String) atributos.getAttribute(ATRIBUTO_CABECALHO),
                     (String) atributos.getAttribute(ATRIBUTO_CONTEUDO),
                     Boolean.TRUE.equals(atributos.getAttribute(ATRIBUTO_MENSAGEM_PROPRIA)),
@@ -1083,7 +1514,7 @@ public final class ClienteChatFrame extends JFrame {
     private record MensagemPartes(String cabecalho, String conteudo) {
     }
 
-    private record DadosMensagem(String cabecalho, String conteudo, boolean propria,
+    private record DadosMensagem(String remetente, String cabecalho, String conteudo, boolean propria,
             String idMensagem) {
     }
 
@@ -1113,8 +1544,9 @@ public final class ClienteChatFrame extends JFrame {
 
         private static final int LARGURA_MAXIMA = 520;
         private static final int LARGURA_MINIMA = 96;
-        private static final int MARGEM_HORIZONTAL = 24;
+        private static final int MARGEM_HORIZONTAL = 58;
         private static final int RAIO = 16;
+        private static final int TAMANHO_AVATAR = 30;
 
         private MensagemParagraphView(Element elemento) {
             super(elemento);
@@ -1176,28 +1608,74 @@ public final class ClienteChatFrame extends JFrame {
                 return;
             }
             MensagemConteudoView conteudo = encontrarMensagemConteudoView(this);
-            if (pinturaManualSimples(conteudo)) {
-                pintarMensagemSimples(grafico, alocacao, conteudo);
+            if (conteudo == null) {
                 return;
             }
-            Rectangle balao = calcularRetanguloDoBalaoLongo(alocacao);
+            pintarMensagemDiscord(grafico, alocacao, conteudo);
+        }
 
+        private void pintarMensagemDiscord(Graphics grafico, Shape alocacao,
+                MensagemConteudoView conteudo) {
+            DadosMensagem dados = conteudo.obterDadosMensagem();
+            MensagemDimensoes dimensoes = conteudo.obterDimensoesDoFluxo();
+            List<Element> paragrafos = conteudo.paragrafosDaMensagem(dados.idMensagem());
+            int indiceParagrafo = Math.max(0, paragrafos.indexOf(getElement()));
+            List<List<String>> linhasPorParagrafo = dimensoes.linhas().conteudoPorParagrafo();
+            List<String> linhas = indiceParagrafo < linhasPorParagrafo.size()
+                    ? linhasPorParagrafo.get(indiceParagrafo) : List.of(dados.conteudo());
+            Rectangle area = alocacao.getBounds();
+            int xTexto = area.x + getLeftInset() + TAMANHO_AVATAR + 12;
+            int yTopo = area.y + getTopInset();
             Graphics2D grafico2d = (Graphics2D) grafico.create();
             try {
                 grafico2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                         RenderingHints.VALUE_ANTIALIAS_ON);
-                Color cor = StyleConstants.getBackground(getAttributes());
-                if (cor == null) {
-                    cor = AZUL_SECUNDARIO;
+                Font fonteConteudo = conteudo.getFont();
+                Font fonteNome = fonteConteudo.deriveFont(Font.BOLD, 13f);
+                Font fonteHorario = fonteConteudo.deriveFont(Font.PLAIN, 11f);
+                FontMetrics metricasConteudo = grafico2d.getFontMetrics(fonteConteudo);
+                FontMetrics metricasNome = grafico2d.getFontMetrics(fonteNome);
+
+                if (indiceParagrafo == 0) {
+                    int avatarX = area.x + getLeftInset();
+                    int avatarY = yTopo + 2;
+                    grafico2d.setColor(dados.propria() ? AZUL_PRINCIPAL : AZUL_SECUNDARIO);
+                    grafico2d.fillOval(avatarX, avatarY, TAMANHO_AVATAR, TAMANHO_AVATAR);
+                    grafico2d.setColor(TEXTO_CLARO);
+                    String inicial = dados.remetente() == null || dados.remetente().isBlank()
+                            ? "?" : dados.remetente().substring(0, 1).toUpperCase();
+                    grafico2d.setFont(fonteNome);
+                    FontMetrics metricasAvatar = grafico2d.getFontMetrics();
+                    grafico2d.drawString(inicial,
+                            avatarX + (TAMANHO_AVATAR - metricasAvatar.stringWidth(inicial)) / 2,
+                            avatarY + (TAMANHO_AVATAR + metricasAvatar.getAscent()
+                                    - metricasAvatar.getDescent()) / 2);
+
+                    String cabecalho = dados.cabecalho() == null ? "" : dados.cabecalho();
+                    int fimHorario = cabecalho.indexOf(']');
+                    String horario = fimHorario >= 0 ? cabecalho.substring(1, fimHorario) : "";
+                    String nome = dados.remetente() == null ? "Usuario" : dados.remetente();
+                    grafico2d.setColor(TEXTO_CLARO);
+                    grafico2d.setFont(fonteNome);
+                    grafico2d.drawString(nome, xTexto, yTopo + metricasNome.getAscent());
+                    int xHorario = xTexto + metricasNome.stringWidth(nome) + 8;
+                    grafico2d.setColor(TEXTO_SECUNDARIO);
+                    grafico2d.setFont(fonteHorario);
+                    grafico2d.drawString(horario, xHorario,
+                            yTopo + metricasNome.getAscent());
+                    yTopo += dimensoes.alturaCabecalho();
                 }
-                grafico2d.setColor(cor);
-                grafico2d.fillRoundRect(balao.x, balao.y, balao.width,
-                        balao.height, RAIO, RAIO);
+
+                grafico2d.setColor(TEXTO_CLARO);
+                grafico2d.setFont(fonteConteudo);
+                int linhaBase = yTopo + metricasConteudo.getAscent();
+                for (String linha : linhas) {
+                    grafico2d.drawString(linha, xTexto, linhaBase);
+                    linhaBase += metricasConteudo.getHeight();
+                }
             } finally {
                 grafico2d.dispose();
             }
-
-            super.paint(grafico, alocacao);
         }
 
         private Rectangle calcularRetanguloDoBalaoLongo(Shape alocacao) {

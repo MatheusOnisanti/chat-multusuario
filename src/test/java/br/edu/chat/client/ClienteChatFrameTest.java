@@ -988,8 +988,8 @@ class ClienteChatFrameTest {
 
         assertNotNull(resultado.corPropria());
         assertNotNull(resultado.corRecebida());
-        assertTrue(resultado.corPropria().minX() > resultado.corRecebida().minX());
-        assertTrue(resultado.corPropria().maxX() > resultado.corRecebida().maxX());
+        assertEquals(resultado.corRecebida().minX(), resultado.corPropria().minX());
+        assertEquals(resultado.corRecebida().maxX(), resultado.corPropria().maxX());
         assertEquals(new Color(0x3B, 0x82, 0xF6), resultado.corPropria().cor());
         assertEquals(new Color(0x1E, 0x33, 0x52), resultado.corRecebida().cor());
         assertTrue(resultado.viewsPropria() >= 1);
